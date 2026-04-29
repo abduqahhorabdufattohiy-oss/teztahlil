@@ -149,7 +149,7 @@ def get_full_analysis(f):
 # 7. Bot buyruqlari
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(update.effective_user.id)
-    await update.message.reply_text("Assalomu alaykum! Tahlil qilish uchun ticker yuboring (Masalan: $AAPL)")
+    await update.message.reply_text("marhamat! $ticker yuborishingiz mumkin)")
 
 async def handle_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
