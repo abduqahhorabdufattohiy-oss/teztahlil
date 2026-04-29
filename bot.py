@@ -182,7 +182,7 @@ async def handle_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
         analysis_text, sector_info, price, change = get_full_analysis(fundament)
 
         caption = (
-            f"<b>SANA:</b> {dt_str} (UZB)\n\n"
+            f"<b>SANA:</b> {dt_str} VAQT: (UZB)\n\n"
             f"<b>TICKER:</b> ${ticker} | <b>PRICE:</b> {price} ({change})\n"
             f"<b>SECTOR:</b> {sector_info}\n"
             f"—\n"
