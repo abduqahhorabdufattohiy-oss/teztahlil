@@ -2,14 +2,31 @@ import logging
 import os
 import time
 import pytz
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta, timezone, time as dt_time
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from finvizfinance.quote import finvizfinance
 
+# 1. Muhit o‘zgaruvchilarini yuklash
 load_dotenv()
 
+# 2. Render uchun Port tinglovchi (Bepul rejimda o‘chib qolmasligi uchun)
+def run_http_server():
+    class HealthCheckHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot is alive and running!")
+
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    logger.info(f"Port {port} band qilindi. Render tekshiruvi tayyor.")
+    server.serve_forever()
+
+# 3. Logging sozlamalari
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
     level=logging.INFO
@@ -33,6 +50,7 @@ SECTOR_MAP = {
     "Utilities": "Kommunal xizmatlar"
 }
 
+# 4. Foydalanuvchilarni saqlash
 def save_user(user_id):
     if not os.path.exists(USER_FILE):
         with open(USER_FILE, "w") as f: pass
@@ -42,7 +60,7 @@ def save_user(user_id):
         if str(user_id) not in users:
             f.write(f"{user_id}\n")
 
-# --- IQTISODIY TAQVIM FUNKSIYASI ---
+# 5. Iqtisodiy taqvim funksiyasi
 async def send_economic_calendar(context: ContextTypes.DEFAULT_TYPE):
     if not os.path.exists(USER_FILE):
         return
@@ -73,7 +91,7 @@ async def send_economic_calendar(context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Xabar yuborishda xato ({user_id}): {e}")
 
-# --- ANALIZ FUNKSIYALARI ---
+# 6. Analiz funksiyalari
 def clean_value(val):
     if val in ['-', 'N/A', None]: 
         return "0"
@@ -128,9 +146,10 @@ def get_full_analysis(f):
         logger.error(f"Error in analysis: {e}")
         return "Tahlil jarayonida xatolik.", "N/A", "0", "0%"
 
+# 7. Bot buyruqlari
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(update.effective_user.id)
-    await update.message.reply_text("marhamat! $ticker yuborishingiz mumkin")
+    await update.message.reply_text("Assalomu alaykum! Tahlil qilish uchun ticker yuboring (Masalan: $AAPL)")
 
 async def handle_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -146,7 +165,7 @@ async def handle_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not ticker.isalnum():
         return
 
-    status_msg = await update.message.reply_text(f"QIDIRILMOQDA: {ticker}...")
+    status_msg = await update.message.reply_text(f"Qidirilmoqda: {ticker}...")
 
     try:
         stock = finvizfinance(ticker)
@@ -186,13 +205,19 @@ async def handle_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Request error ({ticker}): {e}")
         await status_msg.edit_text("xatolik yuz berdi yoki ma’lumot topilmadi.")
 
+# 8. Main funksiyasi
 def main():
+    # Port tinglovchini alohida oqimda ishga tushirish
+    threading.Thread(target=run_http_server, daemon=True).start()
+
     token = os.getenv("BOT_TOKEN")
     if not token:
+        logger.error("BOT_TOKEN topilmadi!")
         return
 
     app = Application.builder().token(token).build()
     
+    # Har kuni soat 09:00 da taqvim yuborish
     job_queue = app.job_queue
     job_queue.run_daily(
         send_economic_calendar, 
@@ -202,6 +227,7 @@ def main():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^\$'), handle_request))
 
+    logger.info("Bot polling rejimida ishga tushdi...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
