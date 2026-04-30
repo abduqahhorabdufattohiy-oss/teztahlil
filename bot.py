@@ -188,11 +188,11 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await prog.edit_text(f"${ticker} noto‘g‘ri yoki uzulish yuz berdi")
 
 async def handle_invalid_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Media va noto‘g‘ri formatlarni rad etish uchun ogohlantirish"""
+    """Media va noto‘g‘ri formatlarni rad etish uchun ogohlantirish barchasi qalin shriftda"""
     await update.message.reply_text(
-        "<b>XATOLIK:</b> noto‘g‘ri format.\n\n"
-        "ogohlantirish. faqat aksiya tickerini $ticker formatida yuborishingizni so‘raymiz.\n"
-        "audio, video, rasm, boshqalar va har qanday fayllar qabul qilinmaydi.",
+        "<b>XATOLIK: noto‘g‘ri format.</b>\n\n"
+        "<b>ogohlantirish. faqat aksiya tickerini $ticker formatida yuborishingizni so‘raymiz.</b>\n"
+        "<b>audio, video, rasm, boshqalar va har qanday fayllar qabul qilinmaydi.</b>",
         parse_mode='HTML'
     )
 
@@ -208,13 +208,10 @@ def main():
             if app.job_queue:
                 app.job_queue.run_daily(send_economic_calendar, time=dt_time(hour=9, minute=0, second=0, tzinfo=UZB_TZ))
             
-            # Handlerlar ierarxiyasi
             app.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("marhamat! $ticker yuborishingiz mumkin")))
             
-            # Faqat $ bilan boshlanadigan matnni qabul qilish
             app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^\$'), handle_ticker))
             
-            # Qolgan barcha turdagi xabarlarni rad etish (ogohlantirish bilan)
             app.add_handler(MessageHandler(~filters.COMMAND, handle_invalid_content))
 
             app.run_polling(drop_pending_updates=True)
