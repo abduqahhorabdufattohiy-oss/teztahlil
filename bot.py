@@ -190,9 +190,9 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_invalid_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Media va noto‘g‘ri formatlarni rad etish uchun ogohlantirish"""
     await update.message.reply_text(
-        "<b>Xatolik:</b> Noto‘g‘ri format.\n\n"
+        "<b>XATOLIK:</b> noto‘g‘ri format.\n\n"
         "ogohlantirish. faqat aksiya tickerini $ticker formatida yuborishingizni so‘raymiz.\n"
-        "Audio, video, rasm va boshqa fayllar qabul qilinmaydi.",
+        "audio, video, rasm, boshqalar va har qanday fayllar qabul qilinmaydi.",
         parse_mode='HTML'
     )
 
