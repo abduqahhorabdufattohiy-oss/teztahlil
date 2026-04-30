@@ -38,26 +38,25 @@ def save_user(user_id):
     except Exception as e:
         logger.error(f"DB Error: {e}")
 
-# YANGILANGAN HEALTH CHECK HANDLER (501 xatosini davolash uchun)
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
-        self.wfile.write(b"OK")
+        self.wfile.write(b"Bot is operational")
 
     def do_HEAD(self):
         self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
         self.end_headers()
 
-    def log_message(self, format, *args):
+    def log_message(self, format, *args): 
         return
 
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
     try:
         server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-        logger.info(f"Health server {port}-portda ishga tushdi")
         server.serve_forever()
     except Exception as e:
         logger.error(f"HTTP Server error: {e}")
@@ -91,7 +90,7 @@ async def get_economic_calendar_data():
             events.append(f"<b>{uzb_time}</b> — {title}")
         return "\n".join(events[:10]) if events else "bugun kutilayotgan muhim voqealar topilmadi."
     except Exception:
-        return "ma’lumotlarni yuklashda uzilish bo‘ldi."
+        return "ma’lumotlarni yuklashda uzilish bo’ldi."
 
 async def send_economic_calendar(context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -133,7 +132,7 @@ def perform_analysis(f):
         if any(x in industry for x in haram_sectors):
             shariah = "NOJOIZ"
         elif debt_eq > 0.33:
-            shariah = f"SHUBHALI"
+            shariah = "SHUBHALI"
         else:
             shariah = "JOIZ"
 
@@ -149,7 +148,7 @@ def perform_analysis(f):
         )
         raw_sector = f.get('Sector', 'N/A')
         uzb_sector = SECTOR_MAP.get(raw_sector, raw_sector).upper()
-        return analysis, f"<b>{raw_sector.upper()}</b> ({uzb_sector})", f.get('Price', '0'), f.get('Change', '0')
+        return analysis, f"{raw_sector.upper()} ({uzb_sector})", f.get('Price', '0'), f.get('Change', '0')
     except Exception:
         return "Tahlil xatosi", "N/A", "0", "0%"
 
