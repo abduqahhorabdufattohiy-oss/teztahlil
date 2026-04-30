@@ -130,7 +130,7 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         now = datetime.now(UZB_TZ)
         txt, sec, pr, ch = perform_analysis(f)
         cap = f"<b>SANA:</b> {now.strftime('%d.%m.%Y')} | <b>VAQT:</b> {now.strftime('%H:%M')} (UZB)\n\n<b>TICKER:</b> ${ticker} | <b>PRICE:</b> {pr} ({ch})\n<b>SECTOR:</b> {sec}\n{txt}"
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("FINVIZ", url=f"https://FINVIZ.com/quote.ashx?t={ticker}"), InlineKeyboardButton("TRADINGVIEW", url=f"https://www.TRADINGVIEW.com/symbols/{ticker}/")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("FINVIZ", url=f"https://FINVIZ.com/quote.ashx?t={ticker}"), InlineKeyboardButton("ISLAMICLY", url=f"https://www.islamicly.com/home/stocks")]])
         chart = f"https://charts2.finviz.com/chart.ashx?t={ticker}&ty=c&ta=1&p=d&rev={int(time.time())}"
         try:
             await update.message.reply_photo(photo=chart, caption=cap, parse_mode='HTML', reply_markup=kb)
