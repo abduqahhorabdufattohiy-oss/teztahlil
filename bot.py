@@ -82,8 +82,7 @@ async def get_economic_calendar_data():
             data = response.json()
             
         events = []
-        sorted_events = sorted(data['result'], key=lambda x: x['date'])
-        for event in sorted_events:
+        for event in sorted(data['result'], key=lambda x: x['date']):
             dt = datetime.strptime(event['date'], '%Y-%m-%dT%H:%M:%S.000Z')
             uzb_time = dt.replace(tzinfo=pytz.UTC).astimezone(UZB_TZ).strftime('%H:%M')
             title = event.get('title_id', event.get('indicator', 'Muhim voqea'))
@@ -127,9 +126,9 @@ def perform_analysis(f):
             debt_eq = 0.0
         
         industry = f.get('Industry', '')
-        haram_sectors = ['Banks', 'Insurance', 'Gambling', 'Tobacco', 'Alcohol', 'Entertainment']
+        haram = ['Banks', 'Insurance', 'Gambling', 'Tobacco', 'Alcohol', 'Entertainment']
         
-        if any(x in industry for x in haram_sectors):
+        if any(x in industry for x in haram):
             shariah = "NOJOIZ"
         elif debt_eq > 0.33:
             shariah = "SHUBHALI"
@@ -146,14 +145,13 @@ def perform_analysis(f):
             f"<b>SMA20:</b> {f.get('SMA20', 'N/A')} | <b>SMA50:</b> {f.get('SMA50', 'N/A')} | <b>SMA200:</b> {f.get('SMA200', 'N/A')}\n"
             f"<b>52W Range:</b> {f.get('52W Range', 'N/A')}\n—\n<b>SHARI’AT STATUSI:</b> {shariah}"
         )
-        raw_sector = f.get('Sector', 'N/A')
-        uzb_sector = SECTOR_MAP.get(raw_sector, raw_sector).upper()
-        return analysis, f"{raw_sector.upper()} ({uzb_sector})", f.get('Price', '0'), f.get('Change', '0')
+        raw_sec = f.get('Sector', 'N/A')
+        return analysis, f"{raw_sec.upper()} ({SECTOR_MAP.get(raw_sec, raw_sec).upper()})", f.get('Price', '0'), f.get('Change', '0')
     except Exception:
         return "Tahlil xatosi", "N/A", "0", "0%"
 
 async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text or not update.message.text.startswith('$'): return
+    if not update.message or not update.message.text: return
     
     save_user(update.effective_user.id)
     ticker = "".join(update.message.text.strip()[1:].split()).upper()
@@ -169,7 +167,10 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         now = datetime.now(UZB_TZ)
         txt, sec, pr, ch = perform_analysis(f)
-        cap = f"<b>SANA:</b> {now.strftime('%d.%m.%Y')} | <b>VAQT:</b> {now.strftime('%H:%M')} (UZB)\n\n<b>TICKER:</b> ${ticker} | <b>PRICE:</b> {pr} ({ch})\n<b>SECTOR:</b> {sec}\n{txt}"
+        cap = (f"<b>SANA:</b> {now.strftime('%d.%m.%Y')} | <b>VAQT:</b> {now.strftime('%H:%M')} (UZB)\n\n"
+               f"<b>TICKER:</b> ${ticker} | <b>PRICE:</b> {pr} ({ch})\n"
+               f"<b>SECTOR:</b> {sec}\n"
+               f"{txt}")
         
         kb = InlineKeyboardMarkup([[
             InlineKeyboardButton("FINVIZ", url=f"https://FINVIZ.com/quote.ashx?t={ticker}"),
@@ -186,6 +187,15 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await prog.edit_text(f"${ticker} noto‘g‘ri yoki uzulish yuz berdi")
 
+async def handle_invalid_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Media va noto‘g‘ri formatlarni rad etish uchun ogohlantirish"""
+    await update.message.reply_text(
+        "<b>Xatolik:</b> Noto‘g‘ri format.\n\n"
+        "ogohlantirish. faqat aksiya tickerini $ticker formatida yuborishingizni so‘raymiz.\n"
+        "Audio, video, rasm va boshqa fayllar qabul qilinmaydi.",
+        parse_mode='HTML'
+    )
+
 def main():
     init_db()
     threading.Thread(target=run_http_server, daemon=True).start()
@@ -198,8 +208,15 @@ def main():
             if app.job_queue:
                 app.job_queue.run_daily(send_economic_calendar, time=dt_time(hour=9, minute=0, second=0, tzinfo=UZB_TZ))
             
+            # Handlerlar ierarxiyasi
             app.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("marhamat! $ticker yuborishingiz mumkin")))
+            
+            # Faqat $ bilan boshlanadigan matnni qabul qilish
             app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^\$'), handle_ticker))
+            
+            # Qolgan barcha turdagi xabarlarni rad etish (ogohlantirish bilan)
+            app.add_handler(MessageHandler(~filters.COMMAND, handle_invalid_content))
+
             app.run_polling(drop_pending_updates=True)
         except Exception:
             time.sleep(10)
