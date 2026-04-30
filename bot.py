@@ -38,17 +38,26 @@ def save_user(user_id):
     except Exception as e:
         logger.error(f"DB Error: {e}")
 
+# YANGILANGAN HEALTH CHECK HANDLER (501 xatosini davolash uchun)
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
         self.end_headers()
-        self.wfile.write(b"Bot is operational")
-    def log_message(self, format, *args): return
+        self.wfile.write(b"OK")
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        return
 
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
     try:
         server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+        logger.info(f"Health server {port}-portda ishga tushdi")
         server.serve_forever()
     except Exception as e:
         logger.error(f"HTTP Server error: {e}")
