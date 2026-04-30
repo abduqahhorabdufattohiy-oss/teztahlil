@@ -122,9 +122,9 @@ def perform_analysis(f):
         haram_sectors = ['Banks', 'Insurance', 'Gambling', 'Tobacco', 'Alcohol', 'Entertainment']
         
         if any(x in industry for x in haram_sectors):
-            shariah = "NOJOIZ (Sektor taqiqlangan)"
+            shariah = "NOJOIZ"
         elif debt_eq > 0.33:
-            shariah = f"SHUBHALI (Qarz yuqori: {raw_debt})"
+            shariah = f"SHUBHALI"
         else:
             shariah = "JOIZ"
 
