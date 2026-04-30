@@ -131,7 +131,7 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text or not update.message.text.startswith('$'): return
     save_user(update.effective_user.id)
     ticker = "".join(update.message.text.strip()[1:].split()).upper()
-    prog = await update.message.reply_text(f"<b>QIDIRILMOQDA:</b> ${ticker}...")
+    prog = await update.message.reply_text(f"QIDIRILMOQDA.. ${ticker}...")
     try:
         f = finvizfinance(ticker).ticker_fundament()
         if not f:
