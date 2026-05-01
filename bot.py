@@ -67,7 +67,7 @@ async def get_economic_calendar_data():
     cached_data = get_cache("calendar_uz")
     if cached_data: return cached_data.split("||")
 
-    sources = ["https://economic-calendar.tradingview.com/events"] # Asosiy manba
+    sources = ["https://economic-calendar.tradingview.com/events"]
     params = {
         "from": datetime.now().strftime('%Y-%m-%dT00:00:00.000Z'),
         "to": datetime.now().strftime('%Y-%m-%dT23:59:59.999Z'),
@@ -127,7 +127,8 @@ async def send_economic_calendar(context: ContextTypes.DEFAULT_TYPE):
     conn.close()
 
     if events is None:
-        text = f"<b>AQSh IQTISODIY TAQVIMI | {today}</b>\n—\nma’lumotlarni yuklashda texnik uzilish yuz berdi. marhamat, quyida manbalar orqali tanishib ko‘rishingiz mumkin."
+        text = f"<b>AQSh IQTISODIY TAQVIMI | {today}</b>\n—\nma’lumotlarni yuklashda texnik uzilish yuz berdi. 
+        marhamat, quyida manbalar orqali tanishib ko‘rishingiz mumkin."
     elif events:
         text = f"<b>AQSh IQTISODIY TAQVIMI | {today}</b>\n—\nbugun (UZB vaqti bilan):\n\n" + "\n".join(events[:12])
     else:
@@ -166,7 +167,7 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prog = await update.message.reply_text(f"QIDIRILMOQDA.. ${ticker}")
     try:
         f = await asyncio.to_thread(finvizfinance(ticker).ticker_fundament)
-        if not f: await prog.edit_text("Aksiya topilmadi."); return
+        if not f: await prog.edit_text(f"${ticker} topilmadi."); return
         
         txt, sec, pr, ch = perform_analysis(f)
         cap = (f"<b>SANA:</b> {datetime.now(UZB_TZ).strftime('%d.%m.%Y | %H:%M')} (UZB)\n\n"
@@ -181,7 +182,7 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             await prog.edit_text(cap, parse_mode='HTML', reply_markup=kb_links)
     except:
-        await prog.edit_text("$ticker noto‘g‘ri yoki uzilish yuz berdi")
+        await prog.edit_text(f"${ticker} noto‘g‘ri yoki texnik uzilish yuz berdi")
 
 def main():
     init_db()
