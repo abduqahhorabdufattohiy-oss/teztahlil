@@ -1,7 +1,5 @@
-python-telegram-bot[job-queue]
+python-telegram-bot
 finvizfinance
-pytz
+httpx
 python-dotenv
-pandas
-beautifulsoup4
-googletrans==4.0.0-rc1
+pytz
