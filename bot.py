@@ -89,7 +89,7 @@ async def get_economic_calendar_data():
             events.append(f"<b>{uzb_time}</b> — {title}")
         return "\n".join(events[:10]) if events else "bugun kutilayotgan muhim voqealar topilmadi."
     except Exception:
-        return "ma’lumotlarni yuklashda uzilish bo’ldi."
+        return "ma’lumotlarni yuklashda uzilish bo‘ldi."
 
 async def send_economic_calendar(context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -101,7 +101,7 @@ async def send_economic_calendar(context: ContextTypes.DEFAULT_TYPE):
 
         today = datetime.now(UZB_TZ).strftime('%d.%m.%Y')
         calendar_text = await get_economic_calendar_data()
-        text = f"<b>AQSh IQTISODIY TAQVIMI | {today}</b>\n—\nbugun kutilayotgan muhim voqealar (UZB vaqti bilan):\n\n{calendar_text}"
+        text = f"<b>AQSh IQTISODIY TAQVIMI | {today}</b>\n—\nbugun (UZB vaqti bilan):\n\n{calendar_text}"
         kb = InlineKeyboardMarkup([[
             InlineKeyboardButton("FINVIZ", url="https://FINVIZ.com/calendar.ashx"),
             InlineKeyboardButton("TRADINGVIEW", url="https://www.TRADINGVIEW.com/economic-calendar/")
