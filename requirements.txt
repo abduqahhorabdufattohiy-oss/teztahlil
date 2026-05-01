@@ -2,7 +2,7 @@ python-telegram-bot[job-queue]==21.10
 finvizfinance
 pytz
 python-dotenv
-httpx
+httpx==0.24.1
 pandas
 beautifulsoup4
 googletrans==4.0.0-rc1
