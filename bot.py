@@ -31,7 +31,7 @@ ECONOMIC_TRANSLATIONS = {
     "FOMC Member Speech": "FOMC a’zosi nutqi",
     "CPI": "Inflyatsiya darajasi (CPI)",
     "GDP": "YaIM (Yalpi ichki mahsulot)",
-    "Initial Jobless Claims": "Ishsizlik nafaqasi uchun dasta-labki arizalar",
+    "Initial Jobless Claims": "Ishsizlik nafaqasi uchun dastlabki arizalar",
     "Fed Interest Rate Decision": "FED foiz stavkasi qarori",
     "Consumer Confidence": "Iste’molchilar ishonchi indeksi",
     "Retail Sales": "Chakana savdo hajmi"
@@ -186,7 +186,7 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         kb = InlineKeyboardMarkup([[
             InlineKeyboardButton("FINVIZ", url=f"https://finviz.com/quote.ashx?t={ticker}"),
-            InlineKeyboardButton("ISLAMICLY", url=f"https://www.islamicly.com/stock-details/{ticker}")
+            InlineKeyboardButton("ISLAMICLY", url="https://www.islamicly.com/home/stocks")
         ]])
         
         chart = f"https://charts2.finviz.com/chart.ashx?t={ticker}&ty=c&ta=1&p=d&rev={int(time.time())}"
@@ -199,7 +199,7 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_invalid_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "<b>XATOLIK: noto‘g‘ri format.</b>\n\n"
-        "<b>ogohlantirish. faqat aksiya tickerini $ticker formatida yuborishingizni so‘raymiz.</b>",
+        "<b>ogohlantirish. faqat aksiya tickerini $ticker matn formatida yuborishingizni so‘raymiz.</b>",
         parse_mode='HTML'
     )
 
