@@ -3,3 +3,4 @@ finvizfinance
 httpx
 python-dotenv
 pytz
+deep-translator
