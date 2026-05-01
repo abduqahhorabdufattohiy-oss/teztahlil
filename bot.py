@@ -2,7 +2,6 @@ import logging
 import os
 import time
 import pytz
-import threading
 import asyncio
 import sqlite3
 import httpx
@@ -13,7 +12,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from finvizfinance.quote import finvizfinance
 from googletrans import Translator
 
-# Loglar va Sozlamalar
+# 1. LOGLAR VA SOZLAMALAR
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -22,87 +21,91 @@ translator = Translator()
 DB_FILE = "bot_pro.db"
 UZB_TZ = pytz.timezone('Asia/Tashkent')
 
-# 1. MA’LUMOTLAR BAZASI VA KESHLASHTIRISH
+# Render monitori uchun PORT (8080)
+PORT = int(os.environ.get('PORT', 8080))
+
+# 2. MA’LUMOTLAR BAZASI (Xavfsiz ulanish)
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    conn.execute('''CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY)''')
-    conn.execute('''CREATE TABLE IF NOT EXISTS cache 
-                    (key TEXT PRIMARY KEY, value TEXT, expires DATETIME)''')
-    conn.commit()
-    conn.close()
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute('''CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS cache 
+                        (key TEXT PRIMARY KEY, value TEXT, expires DATETIME)''')
+        conn.commit()
 
 def get_cache(key):
     try:
-        conn = sqlite3.connect(DB_FILE)
-        res = conn.execute("SELECT value FROM cache WHERE key = ? AND expires > ?", 
-                           (key, datetime.now())).fetchone()
-        conn.close()
-        return res[0] if res else None
-    except: return None
+        with sqlite3.connect(DB_FILE) as conn:
+            res = conn.execute("SELECT value FROM cache WHERE key = ? AND expires > ?", 
+                               (key, datetime.now())).fetchone()
+            return res[0] if res else None
+    except Exception as e:
+        logger.error(f"Cache get xatosi: {e}")
+        return None
 
 def set_cache(key, value, minutes=15):
     try:
-        conn = sqlite3.connect(DB_FILE)
         expires = datetime.now() + timedelta(minutes=minutes)
-        conn.execute("INSERT OR REPLACE INTO cache VALUES (?, ?, ?)", (key, value, expires))
-        conn.commit()
-        conn.close()
-    except: pass
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("INSERT OR REPLACE INTO cache VALUES (?, ?, ?)", (key, value, expires))
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Cache set xatosi: {e}")
 
-# 2. TARJIMA VA ZAXIRA MANBALAR
+# 3. TARJIMA VA TAQVIM
 async def translate_safe(text):
     dictionary = {
         "Trade Balance": "Tashqi savdo balansi", "Factory Orders": "Zavod buyurtmalari",
         "Unemployment Claims": "Ishsizlik nafaqasi so‘rovlari", "CPI": "Iste’mol narxlari indeksi (CPI)"
     }
     if text in dictionary: return dictionary[text]
-    for _ in range(2):
-        try:
-            result = await asyncio.to_thread(translator.translate, text, src='en', dest='uz')
-            return result.text
-        except: await asyncio.sleep(1)
-    return text
+    try:
+        # Googletrans asinxron emas, shuning uchun thread’da ishlatamiz
+        result = await asyncio.to_thread(translator.translate, text, src='en', dest='uz')
+        return result.text
+    except:
+        return text
 
 async def get_economic_calendar_data():
     cached_data = get_cache("calendar_uz")
     if cached_data: return cached_data.split("||")
 
-    sources = ["https://economic-calendar.tradingview.com/events"]
+    url = "https://economic-calendar.tradingview.com/events"
     params = {
         "from": datetime.now().strftime('%Y-%m-%dT00:00:00.000Z'),
         "to": datetime.now().strftime('%Y-%m-%dT23:59:59.999Z'),
         "countries": "US"
     }
 
-    for url in sources:
-        for i in range(3):
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(url, params=params, timeout=15)
-                    response.raise_for_status()
-                    data = response.json()
-                
-                events = []
-                for event in sorted(data.get('result', []), key=lambda x: x.get('date', '')):
-                    dt = datetime.strptime(event['date'], '%Y-%m-%dT%H:%M:%S.000Z')
-                    uzb_time = dt.replace(tzinfo=pytz.UTC).astimezone(UZB_TZ).strftime('%H:%M')
-                    title_uz = await translate_safe(event.get('title_id', event.get('indicator', 'Muhim voqea')))
-                    events.append(f"<b>{uzb_time}</b> — {title_uz}")
-                
-                if events:
-                    set_cache("calendar_uz", "||".join(events), minutes=60)
-                    return events
-            except:
-                await asyncio.sleep(2)
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            events = []
+            for event in sorted(data.get('result', []), key=lambda x: x.get('date', '')):
+                dt = datetime.strptime(event['date'], '%Y-%m-%dT%H:%M:%S.000Z')
+                uzb_time = dt.replace(tzinfo=pytz.UTC).astimezone(UZB_TZ).strftime('%H:%M')
+                title_uz = await translate_safe(event.get('indicator', 'Muhim voqea'))
+                events.append(f"<b>{uzb_time}</b> — {title_uz}")
+            
+            if events:
+                set_cache("calendar_uz", "||".join(events), minutes=60)
+                return events
+    except Exception as e:
+        logger.error(f"Taqvim xatosi: {e}")
     return None
 
-# 3. TAHLIL MANTIQI
+# 4. TAHLIL MANTIQI (Shari’at statusi qo'shildi)
 def perform_analysis(f):
     try:
         raw_debt = str(f.get('Debt/Eq', '0')).replace(',', '')
         debt_eq = float(raw_debt) if raw_debt not in ['-', 'N/A', ''] else 0.0
         industry = f.get('Industry', '')
-        shariah = "NOJOIZ" if any(x in industry for x in ['Banks', 'Insurance', 'Gambling', 'Tobacco']) else ("SHUBHALI" if debt_eq > 0.33 else "JOIZ")
+        
+        # Sektorlarni tekshirish
+        haram_sectors = ['Banks', 'Insurance', 'Gambling', 'Tobacco', 'Alcohol', 'Entertainment']
+        shariah = "NOJOIZ" if any(x in industry for x in haram_sectors) else ("SHUBHALI" if debt_eq > 0.33 else "JOIZ")
         
         analysis = (
             f"—\n■ FUNDAMENTAL (VALUATION & DEBT)\n"
@@ -115,19 +118,19 @@ def perform_analysis(f):
             f"<b>52W Range:</b> {f.get('52W Range', 'N/A')}\n—\n<b>SHARI’AT STATUSI:</b> {shariah}"
         )
         return analysis, f.get('Sector', 'N/A').upper(), f.get('Price', '0'), f.get('Change', '0')
-    except: return "Tahlil xatosi", "N/A", "0", "0%"
+    except:
+        return "Tahlil xatosi", "N/A", "0", "0%"
 
-# 4. BOT FUNKSIYALARI
+# 5. BOT ISHLASHI
 async def send_economic_calendar(context: ContextTypes.DEFAULT_TYPE):
     today = datetime.now(UZB_TZ).strftime('%d.%m.%Y')
     events = await get_economic_calendar_data()
     
-    conn = sqlite3.connect(DB_FILE)
-    user_ids = [row[0] for row in conn.execute("SELECT user_id FROM users").fetchall()]
-    conn.close()
+    with sqlite3.connect(DB_FILE) as conn:
+        user_ids = [row[0] for row in conn.execute("SELECT user_id FROM users").fetchall()]
 
     if events is None:
-        text = f"<b>AQSh IQTISODIY TAQVIMI | {today}</b>\n—\nma’lumotlarni yuklashda texnik uzilish yuz berdi. marhamat, quyida manbalar orqali tanishib ko‘rishingiz mumkin."
+        text = f"<b>AQSh IQTISODIY TAQVIMI | {today}</b>\n—\nma’lumotlarni yuklashda texnik uzilish yuz berdi."
     elif events:
         text = f"<b>AQSh IQTISODIY TAQVIMI | {today}</b>\n—\nbugun (UZB vaqti bilan):\n\n" + "\n".join(events[:12])
     else:
@@ -148,10 +151,9 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ticker = "".join(update.message.text.strip()[1:].split()).upper()
     user_id = str(update.effective_user.id)
     
-    conn = sqlite3.connect(DB_FILE)
-    conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
-    conn.commit()
-    conn.close()
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
+        conn.commit()
 
     cached_res = get_cache(f"stock_{ticker}")
     kb_links = InlineKeyboardMarkup([[
@@ -166,7 +168,8 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prog = await update.message.reply_text(f"QIDIRILMOQDA.. ${ticker}")
     try:
         f = await asyncio.to_thread(finvizfinance(ticker).ticker_fundament)
-        if not f: await prog.edit_text(f"${ticker} topilmadi."); return
+        if not f:
+            await prog.edit_text(f"${ticker} topilmadi."); return
         
         txt, sec, pr, ch = perform_analysis(f)
         cap = (f"<b>SANA:</b> {datetime.now(UZB_TZ).strftime('%d.%m.%Y | %H:%M')} (UZB)\n\n"
@@ -181,7 +184,7 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             await prog.edit_text(cap, parse_mode='HTML', reply_markup=kb_links)
     except:
-        await prog.edit_text(f"${ticker} noto‘g‘ri yoki texnik uzilish yuz berdi")
+        await prog.edit_text(f"${ticker} noto‘g‘ri yoki uzilish yuz berdi")
 
 def main():
     init_db()
@@ -193,6 +196,8 @@ def main():
     
     app.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("<b>marhamat! $ticker yuborishingiz mumkin", parse_mode='HTML')))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^\$'), handle_ticker))
+    
+    logger.info(f"Bot {PORT}-portda ishga tushdi...")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
