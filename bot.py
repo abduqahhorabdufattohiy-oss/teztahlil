@@ -15,6 +15,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from finvizfinance.quote import finvizfinance
 from deep_translator import GoogleTranslator
 
+# Loglarni sozlash
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -59,12 +60,10 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(b"Bot is operational")
-        
     def do_HEAD(self):
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
-        
     def log_message(self, format, *args): return
 
 def run_http_server():
@@ -83,12 +82,13 @@ async def get_economic_calendar_data():
             "to": datetime.now().strftime('%Y-%m-%dT23:59:59.999Z'),
             "countries": "US"
         }
-        async with httpx.AsyncClient() as client:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        async with httpx.AsyncClient(headers=headers) as client:
             response = await client.get(url, params=params, timeout=15)
             data = response.json()
         events = []
         translator = GoogleTranslator(source='en', target='uz')
-        for event in sorted(data['result'], key=lambda x: x['date']):
+        for event in sorted(data.get('result', []), key=lambda x: x['date']):
             dt = datetime.strptime(event['date'], '%Y-%m-%dT%H:%M:%S.000Z')
             uzb_time = dt.replace(tzinfo=pytz.UTC).astimezone(UZB_TZ).strftime('%H:%M')
             orig_title = event.get('title_id', event.get('indicator', 'Muhim voqea'))
@@ -97,8 +97,8 @@ async def get_economic_calendar_data():
                 try: title = translator.translate(orig_title)
                 except: title = orig_title
             events.append(f"<b>{uzb_time}</b> — {title}")
-        return "\n".join(events[:10]) if events else "bugun iqtisodiy hisobotlar va yangiliklar kutilmayapti."
-    except: return "ma’lumotlarni yuklashda uzilish bo‘ldi. marhamat, quyidagi havolalar orqali tanishib xabardor bo‘lishingiz mumkin."
+        return "\n".join(events[:10]) if events else "Bugun iqtisodiy yangiliklar kutilmayapti."
+    except: return "Ma’lumotlarni yuklashda uzilish bo‘ldi."
 
 async def send_economic_calendar(context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -106,20 +106,15 @@ async def send_economic_calendar(context: ContextTypes.DEFAULT_TYPE):
         user_ids = [row[0] for row in conn.execute("SELECT user_id FROM users").fetchall()]
         conn.close()
         if not user_ids: return
-
         today = datetime.now(UZB_TZ).strftime('%d.%m.%Y')
         calendar_text = await get_economic_calendar_data()
-        
         text = f"<b>AQSh IQTISODIY TAQVIMI | {today}</b>\n—\n{calendar_text}"
-            
         kb = InlineKeyboardMarkup([[
             InlineKeyboardButton("INVESTING", url="https://uz.investing.com/news/stock-market-news"),
             InlineKeyboardButton("TRADINGVIEW", url="https://www.tradingview.com/economic-calendar/")
         ]])
-
         for u_id in user_ids:
-            try:
-                await context.bot.send_message(chat_id=u_id, text=text, reply_markup=kb, parse_mode='HTML', disable_web_page_preview=True)
+            try: await context.bot.send_message(chat_id=u_id, text=text, reply_markup=kb, parse_mode='HTML', disable_web_page_preview=True)
             except: continue
     except: pass
 
@@ -141,7 +136,6 @@ def perform_analysis(f):
         industry = f.get('Industry', '')
         haram = ['Banks', 'Insurance', 'Gambling', 'Tobacco', 'Alcohol', 'Entertainment']
         shariah = "NOJOIZ" if any(x in industry for x in haram) else ("SHUBHALI" if debt_eq > 0.33 else "JOIZ")
-
         analysis = (
             f"—\n■ FUNDAMENTAL (VALUATION & DEBT)\n"
             f"<b>M.CAP:</b> {f.get('Market Cap', 'N/A')} | <b>P/E:</b> {f.get('P/E', 'N/A')} | <b>Fwd P/E:</b> {f.get('Forward P/E', 'N/A')}\n"
@@ -172,25 +166,28 @@ async def handle_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cap = (f"<b>SANA:</b> {now.strftime('%d.%m.%Y')} | <b>VAQT:</b> {now.strftime('%H:%M')} (UZB)\n\n"
                f"<b>TICKER:</b> ${ticker} | <b>PRICE:</b> {pr} ({ch})\n"
                f"<b>SECTOR:</b> {sec}\n{txt}")
-        
         kb = InlineKeyboardMarkup([[
             InlineKeyboardButton("FINVIZ", url=f"https://finviz.com/quote.ashx?t={ticker}"),
             InlineKeyboardButton("ISLAMICLY", url="https://www.islamicly.com/home/stocks")
         ]])
         
-        chart = f"https://charts2.finviz.com/chart.ashx?t={ticker}&ty=c&ta=1&p=d&rev={int(time.time())}"
-        try:
-            await update.message.reply_photo(photo=chart, caption=cap, parse_mode='HTML', reply_markup=kb)
-            await prog.delete()
-        except: await prog.edit_text(cap, parse_mode='HTML', reply_markup=kb)
-    except: await prog.edit_text(f"${ticker} noto‘g‘ri yoki uzilish yuz berdi")
+        # REAL-TIME CHART MUAMMOSINI HAL QILISH: Rasmni bayt ko'rinishida yuklab yuborish
+        chart_url = f"https://chart.finviz.com/chart.ashx?t={ticker}&ty=c&ta=1&p=d&rev={int(time.time())}"
+        async with httpx.AsyncClient(headers={'User-Agent': 'Mozilla/5.0'}) as client:
+            try:
+                response = await client.get(chart_url, timeout=10)
+                if response.status_code == 200:
+                    await update.message.reply_photo(photo=response.content, caption=cap, parse_mode='HTML', reply_markup=kb)
+                    await prog.delete()
+                else: raise Exception("Chart not found")
+            except:
+                await prog.edit_text(cap, parse_mode='HTML', reply_markup=kb)
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await prog.edit_text(f"${ticker} ma'lumotlarida uzilish bo'ldi.")
 
 async def handle_invalid_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "<b>XATOLIK: noto‘g‘ri format.</b>\n\n"
-        "<b>ogohlantirish. faqat aksiya tickerini $ticker matn formatida yuborishingizni so‘raymiz.</b>",
-        parse_mode='HTML'
-    )
+    await update.message.reply_text("<b>XATOLIK:</b> faqat $ticker formatida yuboring.", parse_mode='HTML')
 
 def main():
     init_db()
@@ -200,7 +197,7 @@ def main():
     app = Application.builder().token(token).build()
     if app.job_queue:
         app.job_queue.run_daily(send_economic_calendar, time=dt_time(hour=9, minute=0, second=0, tzinfo=UZB_TZ))
-    app.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("marhamat! $ticker yuborishingiz mumkin")))
+    app.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("marhamat! $ticker yuboring.")))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r'^\$'), handle_ticker))
     app.add_handler(MessageHandler(~filters.COMMAND, handle_invalid_content))
     app.run_polling(drop_pending_updates=True)
