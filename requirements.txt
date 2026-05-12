@@ -1,7 +1,6 @@
-python-telegram-bot==20.*
+python-telegram-bot
 finvizfinance
 deep-translator
 httpx
 pytz
 python-dotenv
-pandas
